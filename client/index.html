@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- will automatically create an io object for the sockets-->
     <script src="/socket.io/socket.io.js"></script>
     <script>
         "use strict";
@@ -9,26 +10,100 @@
         var ctx;
         var socket;
 
+        //object to hold all of our draw objects
         var draws = {}; 
 
         function draw() {
         
-
+            //get the time for indexing in our draws object. 
+            //This is NOT the best way of doing it, but it works for example
+            var time = new Date().getTime();
+            //set the draws object at the time position to this json object of coordinates to draw
+            //we will redraw from the draws object. The sent parameter tells us if it went out via the
+            //network or not. We will color those different. The rest are canvas rect properties
+            draws[time] = {sent: false, x: 100, y: 100, width: 100, height: 100};
+            
+            //get the time for indexing in our draws object
+            time = new Date().getTime();
+            //set up coordinates to send (not directly draw). These will be received by other users
+            //We will use a set parameter to say  that the object was sent over the network (for coloring)
+            var coords = {sent: true, x: 0, y:0, width: 100, height: 100};
+            //emit a draw message type with the time and coords. The 'draw' message type will be received by the socket.on('draw' type on the server
+            socket.emit('draw', { time: time, coords: coords});
+            
+            
+            //get the time
+            time = new Date().getTime();
+            //add new coords to the draws object at the given time as a variable name
+            draws[time] = {sent: false, x: 200, y: 350, width: 100, height: 100};
+            
+            //get the time
+            time = new Date().getTime();
+            //setup some coords
+            coords = {sent: true, x: 400, y: 50, width: 100, height: 100};
+            //emit a draw message type with the time and coords. The 'draw' message type will be received by the socket.on('draw' type on the server
+            socket.emit('draw', {time: time, coords: coords});
+            
+            //redraw from the object
+            redraw();
         }
         
+        //function to clear and redraw on the canvas
         function redraw() {
-
+            //clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            //get all of the variable names from the draws object.
+            //This will actually give you all of the times since we used that as the index
+            var keys = Object.keys(draws);
+            
+            //for each
+            for(var i = 0; i < keys.length; i++){
+                //pull the draw call at i
+                var drawCall = draws[keys[i]];
+                
+                //if the draw call has a sent property that is true
+                //set the fill style to red. 
+                //We came up with the sent property. It's not magically built it. It's coded in the json
+                //of the draw() function
+                if(drawCall.sent){
+                    ctx.fillStyle = "red";
+                }
+                //if the draw call has a sent property that is false, draw blue
+                else {
+                    ctx.fillStyle = "black";
+                }
+                
+                //fill a rectangle on the screen with the properties from the draw call
+                ctx.fillRect(drawCall.x, drawCall.y, drawCall.width, drawCall.height);
+            }
         }
         
+        //when a message is received from the server
         function update(data) {
-
+            //set the draws at the time of the data to the coords object inside of the data object
+            draws[data.time] = data.coords;
+            
+            //redraw from the object
+            redraw();
         }
 
         function init() {
             canvas = document.querySelector("#canvas");
             ctx = canvas.getContext("2d");
         
-
+            //tell io to connect and give us a socket to use
+            socket = io.connect();
+            
+            //on the connect message type (happens automatically) 
+            //Others do not, but connect fires as soon as the connection is establishhed
+            socket.on('connect', function(){
+                //call draw to kick off the process
+                draw();
+            });
+            
+            //when a 'drawclient' message type is emitted from the server, call the update function here
+            socket.on('drawclient', update);
         }
 
       window.onload = init;
